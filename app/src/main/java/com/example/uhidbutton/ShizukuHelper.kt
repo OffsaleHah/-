@@ -3,6 +3,7 @@ package com.example.uhidbutton
 import android.content.pm.PackageManager
 import android.util.Log
 import rikka.shizuku.Shizuku
+import rikka.shizuku.ShizukuRemoteProcess
 import java.lang.reflect.Method
 
 object ShizukuHelper {
@@ -21,25 +22,22 @@ object ShizukuHelper {
         }
     }
 
-    /**
-     * Выполняет команду через Shizuku.newProcess через reflection,
-     * потому что в API 13.x метод помечен как private.
-     */
     fun runCommand(command: Array<String>): Boolean {
         return try {
             val shizukuClass = Class.forName("rikka.shizuku.Shizuku")
             val method: Method = shizukuClass.getDeclaredMethod(
                 "newProcess",
-                Array<String>::class.java,
-                Array<String>::class.java,
-                Array<String>::class.java
+                Array<String>::class.java,   // cmd: String[]
+                Array<String>::class.java,   // env: String[]
+                String::class.java           // dir: String  <-- ИСПРАВЛЕНО
             )
             method.isAccessible = true
-            val process = method.invoke(null, command, null, null) as? Process
-            process?.waitFor()
+
+            val process = method.invoke(null, command, null, null) as ShizukuRemoteProcess
+            process.waitFor()
             true
         } catch (e: Exception) {
-            Log.e(TAG, "newProcess via reflection failed", e)
+            Log.e(TAG, "newProcess via reflection failed: ${e.javaClass.simpleName}: ${e.message}", e)
             false
         }
     }
