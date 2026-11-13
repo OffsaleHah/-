@@ -1,5 +1,6 @@
 package com.example.uhidbutton
 
+import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
 import rikka.shizuku.Shizuku
@@ -9,8 +10,11 @@ import java.lang.reflect.Method
 object ShizukuHelper {
     private const val TAG = "ShizukuHelper"
     private const val REQUEST_CODE = 1001
+    private const val UHID_PKG = "uhid.purejava"
+
     private var hidProcess: ShizukuRemoteProcess? = null
     private var outputStream: java.io.OutputStream? = null
+    private var apkPath: String? = null
 
     fun isShizukuAvailable(): Boolean = Shizuku.pingBinder()
 
@@ -24,11 +28,32 @@ object ShizukuHelper {
         }
     }
 
+    /**
+     * Проверяет, установлен ли APK uhid.purejava на телефоне.
+     * Возвращает путь к APK или null.
+     */
+    fun findUhidApk(context: Context): String? {
+        if (apkPath != null) return apkPath
+        return try {
+            val info = context.packageManager.getApplicationInfo(UHID_PKG, 0)
+            apkPath = info.sourceDir
+            Log.i(TAG, "Found uhid.purejava APK at: ${info.sourceDir}")
+            apkPath
+        } catch (e: PackageManager.NameNotFoundException) {
+            Log.e(TAG, "uhid.purejava is not installed!")
+            null
+        }
+    }
+
     fun isHidServerAlive(): Boolean = hidProcess?.isAlive == true
 
-    fun startHidServer(): Boolean {
+    /**
+     * Запускает uhid.purejava.Hid через app_process с CLASSPATH на APK uhid.purejava.
+     * Процесс создаёт 4 виртуальных UHID-устройства и ждёт команды в stdin.
+     */
+    fun startHidServer(context: Context): Boolean {
         if (hidProcess?.isAlive == true) {
-            Log.d(TAG, "Hid server already running")
+            Log.d(TAG, "HID server already running")
             return true
         }
 
@@ -37,16 +62,20 @@ object ShizukuHelper {
             stopHidServer()
         }
 
+        val apk = findUhidApk(context) ?: run {
+            Log.e(TAG, "Cannot start: uhid.purejava APK not found")
+            return false
+        }
+
         return try {
-            // Добавлен аргумент "-" для интерактивного режима (чтение команд из stdin)
+            // Команда запуска: app_process /system/bin uhid.purejava.Hid
             val command = arrayOf(
                 "app_process",
-                "-Djava.class.path=/data/local/tmp/classes.dex",
-                "/",
-                "com.android.commands.hid.Hid",
-                "-"
+                "/system/bin",
+                "uhid.purejava.Hid"
             )
-            val env = arrayOf("LD_PRELOAD=libhidcommand_jni.so")
+            // CLASSPATH указывает на установленный APK, а не на classes.dex
+            val env = arrayOf("CLASSPATH=$apk")
 
             val shizukuClass = Class.forName("rikka.shizuku.Shizuku")
             val method: Method = shizukuClass.getDeclaredMethod(
@@ -59,16 +88,16 @@ object ShizukuHelper {
 
             val process = method.invoke(null, command, env, null) as ShizukuRemoteProcess
             hidProcess = process
-            outputStream = process.outputStream // Сохраняем поток для последующих команд
+            outputStream = process.outputStream
 
-            // Даём процессу время на инициализацию
-            Thread.sleep(500)
+            // Даём процессу время инициализировать UHID-устройства
+            Thread.sleep(1000)
 
             if (process.isAlive) {
-                Log.i(TAG, "HID server started successfully in interactive mode")
+                Log.i(TAG, "HID server started successfully via uhid.purejava")
                 true
             } else {
-                Log.e(TAG, "HID server died immediately after start (exit=${process.exitValue()})")
+                Log.e(TAG, "HID server died immediately (exit=${process.exitValue()})")
                 hidProcess = null
                 outputStream = null
                 false
@@ -81,19 +110,23 @@ object ShizukuHelper {
         }
     }
 
-    fun sendKeyPress(keyCode: Int): Boolean {
+    /**
+     * Отправляет произвольную строку-команду в stdin HID-сервера.
+     * Поддерживаемые команды (по меню uhid.purejava):
+     *   m, k, g, t, mt, oob, exit
+     */
+    fun sendCommand(command: String): Boolean {
         val process = hidProcess
         val stream = outputStream
         if (process == null || !process.isAlive || stream == null) {
-            Log.e(TAG, "HID server is not running or output stream is null")
+            Log.e(TAG, "HID server is not running")
             hidProcess = null
             outputStream = null
             return false
         }
 
         return try {
-            val command = "keyboard press $keyCode\n"
-            stream.write(command.toByteArray())
+            stream.write("$command\n".toByteArray())
             stream.flush()
             Log.d(TAG, "Sent command: $command")
             true
@@ -106,6 +139,10 @@ object ShizukuHelper {
     }
 
     fun stopHidServer() {
+        try {
+            outputStream?.write("exit\n".toByteArray())
+            outputStream?.flush()
+        } catch (_: Exception) {}
         try {
             outputStream?.close()
         } catch (_: Exception) {}
