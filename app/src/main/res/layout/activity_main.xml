@@ -14,9 +14,16 @@
         android:layout_marginBottom="24dp" />
 
     <Button
+        android:id="@+id/btnToggleServer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Запустить HID-сервер" />
+
+    <Button
         android:id="@+id/btnPressSpace"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Нажать Пробел (UHID)" />
+        android:layout_marginTop="12dp"
+        android:text="Нажать Пробел" />
 
 </LinearLayout>
