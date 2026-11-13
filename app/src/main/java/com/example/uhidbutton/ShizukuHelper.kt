@@ -3,6 +3,7 @@ package com.example.uhidbutton
 import android.content.pm.PackageManager
 import android.util.Log
 import rikka.shizuku.Shizuku
+import java.lang.reflect.Method
 
 object ShizukuHelper {
     private const val TAG = "ShizukuHelper"
@@ -21,55 +22,30 @@ object ShizukuHelper {
     }
 
     /**
-     * Выполняет shell-команду через Shizuku.
-     * ВАЖНО: Shizuku.newProcess помечен как deprecated, но всё ещё работает.
-     * Если в вашей версии API его нет, используйте reflection (см. ниже).
+     * Выполняет команду через Shizuku.newProcess через reflection,
+     * потому что в API 13.x метод помечен как private.
      */
     fun runCommand(command: Array<String>): Boolean {
         return try {
-            // Прямой вызов (может не работать в новых версиях Shizuku API)
-            val process = Shizuku.newProcess(command, null, null)
-            process.waitFor()
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Direct newProcess failed, trying reflection", e)
-            runCommandViaReflection(command)
-        }
-    }
-
-    /**
-     * Fallback через reflection — работает, если newProcess скрыт в API.
-     */
-    private fun runCommandViaReflection(command: Array<String>): Boolean {
-        return try {
             val shizukuClass = Class.forName("rikka.shizuku.Shizuku")
-            val method = shizukuClass.getDeclaredMethod(
+            val method: Method = shizukuClass.getDeclaredMethod(
                 "newProcess",
                 Array<String>::class.java,
                 Array<String>::class.java,
                 Array<String>::class.java
             )
             method.isAccessible = true
-            val process = method.invoke(null, command, null, null)
-            (process as? Process)?.waitFor()
+            val process = method.invoke(null, command, null, null) as? Process
+            process?.waitFor()
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Reflection newProcess also failed", e)
+            Log.e(TAG, "newProcess via reflection failed", e)
             false
         }
     }
 
-    /**
-     * Отправляет нажатие клавиши через `uinput`.
-     * @param keyCode HID-код клавиши (например, 44 для пробела).
-     */
     fun sendKeyPress(keyCode: Int): Boolean {
-        // Формат команды uinput: uinput -K -d <key> -u <key>
-        val command = arrayOf(
-            "uinput", "-K",
-            "-d", keyCode.toString(),
-            "-u", keyCode.toString()
-        )
+        val command = arrayOf("uinput", "-K", "-d", keyCode.toString(), "-u", keyCode.toString())
         return runCommand(command)
     }
 }
