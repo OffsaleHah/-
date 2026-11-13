@@ -4,6 +4,11 @@
 
     <uses-sdk tools:overrideLibrary="rikka.shizuku.provider,rikka.shizuku.api,rikka.shizuku.shared,rikka.shizuku.aidl" />
 
+    <!-- Точечная видимость пакета uhid.purejava (Android 11+) -->
+    <queries>
+        <package android:name="uhid.purejava" />
+    </queries>
+
     <application
         android:label="UHID Keyboard"
         android:icon="@android:drawable/sym_def_app_icon"
