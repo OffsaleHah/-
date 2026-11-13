@@ -15,36 +15,44 @@ class MainActivity : AppCompatActivity() {
             ShizukuHelper.requestPermission()
         }
 
-        val btnPressSpace = findViewById<Button>(R.id.btnPressSpace)
-
-        // Кнопка для запуска/остановки HID-сервера
-        val btnToggleServer = findViewById<Button>(R.id.btnToggleServer)
-        btnToggleServer.setOnClickListener {
+        findViewById<Button>(R.id.btnStart).setOnClickListener {
             if (!ShizukuHelper.hasPermission()) {
-                Toast.makeText(this, "Сначала предоставьте разрешение Shizuku", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Сначала разрешите Shizuku", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
-            // Здесь можно добавить логику переключения, но для простоты
-            // просто запускаем сервер при каждом нажатии.
-            if (ShizukuHelper.startHidServer()) {
-                Toast.makeText(this, "HID-сервер запущен", Toast.LENGTH_SHORT).show()
+            if (ShizukuHelper.findUhidApk(this) == null) {
+                Toast.makeText(this, "Установите APK uhid.purejava", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            if (ShizukuHelper.startHidServer(this)) {
+                Toast.makeText(this, "HID-сервер запущен (4 устройства)", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, "Не удалось запустить HID-сервер", Toast.LENGTH_LONG).show()
             }
         }
 
-        btnPressSpace.setOnClickListener {
-            // HID-код пробела = 44
-            if (ShizukuHelper.sendKeyPress(44)) {
-                Toast.makeText(this, "Команда 'пробел' отправлена", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "Ошибка: HID-сервер не запущен", Toast.LENGTH_LONG).show()
-            }
+        // Тестовые команды из меню uhid.purejava
+        findViewById<Button>(R.id.btnTestKeyboard).setOnClickListener {
+            sendCmd("k", "Набрать helloworld")
+        }
+        findViewById<Button>(R.id.btnTestMouse).setOnClickListener {
+            sendCmd("m", "Движение мыши")
+        }
+        findViewById<Button>(R.id.btnTestTouch).setOnClickListener {
+            sendCmd("t", "Квадратный жест")
+        }
+
+        findViewById<Button>(R.id.btnStop).setOnClickListener {
+            ShizukuHelper.stopHidServer()
+            Toast.makeText(this, "Остановлено", Toast.LENGTH_SHORT).show()
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        ShizukuHelper.stopHidServer()
+    private fun sendCmd(cmd: String, description: String) {
+        if (ShizukuHelper.sendCommand(cmd)) {
+            Toast.makeText(this, "Отправлено: $description", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "Сервер не запущен", Toast.LENGTH_LONG).show()
+        }
     }
 }
