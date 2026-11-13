@@ -14,16 +14,37 @@
         android:layout_marginBottom="24dp" />
 
     <Button
-        android:id="@+id/btnToggleServer"
+        android:id="@+id/btnStart"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Запустить HID-сервер" />
 
     <Button
-        android:id="@+id/btnPressSpace"
+        android:id="@+id/btnTestKeyboard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
-        android:text="Нажать Пробел" />
+        android:text="Тест: набрать helloworld" />
+
+    <Button
+        android:id="@+id/btnTestMouse"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Тест: движение мыши" />
+
+    <Button
+        android:id="@+id/btnTestTouch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Тест: квадратный жест" />
+
+    <Button
+        android:id="@+id/btnStop"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="Остановить" />
 
 </LinearLayout>
