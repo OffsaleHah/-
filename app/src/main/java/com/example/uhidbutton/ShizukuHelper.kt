@@ -24,8 +24,9 @@ object ShizukuHelper {
     }
 
     /**
-     * Запускает фоновый процесс Hid из classes.dex.
-     * Возвращает true, если процесс успешно запущен.
+     * Запускает фоновый HID-сервер из classes.dex.
+     * LD_PRELOAD=libhidcommand_jni.so обязателен — без него процесс убивается
+     * (см. issue #5 в репозитории AndroidUHidPureJava).
      */
     fun startHidServer(): Boolean {
         if (hidProcess != null) {
@@ -34,8 +35,6 @@ object ShizukuHelper {
         }
 
         return try {
-            // Точная команда, которая запускает HID-сервер.
-            // Путь к classes.dex: /data/local/tmp/classes.dex
             val command = arrayOf(
                 "app_process",
                 "-Djava.class.path=/data/local/tmp/classes.dex",
@@ -43,16 +42,21 @@ object ShizukuHelper {
                 "com.android.commands.hid.Hid"
             )
 
+            // ВАЖНО: LD_PRELOAD заставляет загрузчик подгрузить нативную библиотеку
+            // до старта Java-кода. Без этого Android убивает процесс.
+            val env = arrayOf("LD_PRELOAD=libhidcommand_jni.so")
+
             val shizukuClass = Class.forName("rikka.shizuku.Shizuku")
             val method: Method = shizukuClass.getDeclaredMethod(
                 "newProcess",
-                Array<String>::class.java,
-                Array<String>::class.java,
-                String::class.java
+                Array<String>::class.java,   // cmd: String[]
+                Array<String>::class.java,   // env: String[]
+                String::class.java           // dir: String
             )
             method.isAccessible = true
-            hidProcess = method.invoke(null, command, null, null) as ShizukuRemoteProcess
-            Log.i(TAG, "Hid server process started.")
+
+            hidProcess = method.invoke(null, command, env, null) as ShizukuRemoteProcess
+            Log.i(TAG, "Hid server process started with LD_PRELOAD")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start Hid server: ${e.javaClass.simpleName}: ${e.message}", e)
@@ -61,8 +65,8 @@ object ShizukuHelper {
     }
 
     /**
-     * Отправляет команду нажатия клавиши в фоновый HID-сервер.
-     * ВАЖНО: Этот метод не запускает новый процесс, а пишет в stdin уже запущенного.
+     * Отправляет команду нажатия клавиши в уже запущенный HID-сервер.
+     * @param keyCode HID-код клавиши (44 = пробел).
      */
     fun sendKeyPress(keyCode: Int): Boolean {
         val process = hidProcess ?: run {
@@ -71,8 +75,6 @@ object ShizukuHelper {
         }
 
         return try {
-            // Команда для HID-сервера: нажать и отпустить клавишу.
-            // Формат: keyboard press <hid_key_code>
             val command = "keyboard press $keyCode\n"
             process.outputStream.write(command.toByteArray())
             process.outputStream.flush()
@@ -88,7 +90,11 @@ object ShizukuHelper {
      * Останавливает фоновый HID-сервер.
      */
     fun stopHidServer() {
-        hidProcess?.destroy()
+        try {
+            hidProcess?.destroy()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error while stopping: ${e.message}", e)
+        }
         hidProcess = null
         Log.i(TAG, "Hid server stopped.")
     }
