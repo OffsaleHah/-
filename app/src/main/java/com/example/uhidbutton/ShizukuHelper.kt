@@ -23,15 +23,23 @@ object ShizukuHelper {
         }
     }
 
+    fun isHidServerAlive(): Boolean = hidProcess?.isAlive == true
+
     /**
-     * Запускает фоновый HID-сервер из classes.dex.
-     * LD_PRELOAD=libhidcommand_jni.so обязателен — без него процесс убивается
-     * (см. issue #5 в репозитории AndroidUHidPureJava).
+     * Запускает фоновый HID-сервер.
+     * Проверяет реальное состояние процесса, а не только ссылку.
      */
     fun startHidServer(): Boolean {
-        if (hidProcess != null) {
-            Log.d(TAG, "Hid server is already running.")
+        // Проверяем не ссылку, а реальное состояние
+        if (hidProcess?.isAlive == true) {
+            Log.d(TAG, "Hid server already running (pid=${hidProcess?.pid()})")
             return true
+        }
+
+        // Процесс мёртв — чистим ссылку
+        if (hidProcess != null) {
+            Log.w(TAG, "Old HID process is dead, restarting")
+            hidProcess = null
         }
 
         return try {
@@ -41,36 +49,43 @@ object ShizukuHelper {
                 "/",
                 "com.android.commands.hid.Hid"
             )
-
-            // ВАЖНО: LD_PRELOAD заставляет загрузчик подгрузить нативную библиотеку
-            // до старта Java-кода. Без этого Android убивает процесс.
             val env = arrayOf("LD_PRELOAD=libhidcommand_jni.so")
 
             val shizukuClass = Class.forName("rikka.shizuku.Shizuku")
             val method: Method = shizukuClass.getDeclaredMethod(
                 "newProcess",
-                Array<String>::class.java,   // cmd: String[]
-                Array<String>::class.java,   // env: String[]
-                String::class.java           // dir: String
+                Array<String>::class.java,
+                Array<String>::class.java,
+                String::class.java
             )
             method.isAccessible = true
 
-            hidProcess = method.invoke(null, command, env, null) as ShizukuRemoteProcess
-            Log.i(TAG, "Hid server process started with LD_PRELOAD")
-            true
+            val process = method.invoke(null, command, env, null) as ShizukuRemoteProcess
+            hidProcess = process
+
+            // Даём процессу 300 мс, чтобы он успел упасть (если упадёт)
+            Thread.sleep(300)
+
+            if (process.isAlive) {
+                Log.i(TAG, "HID server started successfully, pid=${process.pid()}")
+                true
+            } else {
+                Log.e(TAG, "HID server died immediately after start (exit=${process.exitValue()})")
+                hidProcess = null
+                false
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start Hid server: ${e.javaClass.simpleName}: ${e.message}", e)
+            Log.e(TAG, "Failed to start HID server: ${e.javaClass.simpleName}: ${e.message}", e)
+            hidProcess = null
             false
         }
     }
 
-    /**
-     * Отправляет команду нажатия клавиши в уже запущенный HID-сервер.
-     * @param keyCode HID-код клавиши (44 = пробел).
-     */
     fun sendKeyPress(keyCode: Int): Boolean {
-        val process = hidProcess ?: run {
-            Log.e(TAG, "Hid server is not running. Call startHidServer() first.")
+        val process = hidProcess
+        if (process == null || !process.isAlive) {
+            Log.e(TAG, "HID server is not running (process null or dead)")
+            hidProcess = null
             return false
         }
 
@@ -82,20 +97,20 @@ object ShizukuHelper {
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send command: ${e.message}", e)
+            hidProcess = null
             false
         }
     }
 
-    /**
-     * Останавливает фоновый HID-сервер.
-     */
     fun stopHidServer() {
         try {
-            hidProcess?.destroy()
+            if (hidProcess?.isAlive == true) {
+                hidProcess?.destroy()
+                Log.i(TAG, "HID server killed")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error while stopping: ${e.message}", e)
         }
         hidProcess = null
-        Log.i(TAG, "Hid server stopped.")
     }
 }
