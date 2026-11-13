@@ -11,27 +11,40 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Запрашиваем разрешение Shizuku при старте
         if (!ShizukuHelper.hasPermission()) {
             ShizukuHelper.requestPermission()
         }
 
         val btnPressSpace = findViewById<Button>(R.id.btnPressSpace)
-        btnPressSpace.setOnClickListener {
+
+        // Кнопка для запуска/остановки HID-сервера
+        val btnToggleServer = findViewById<Button>(R.id.btnToggleServer)
+        btnToggleServer.setOnClickListener {
             if (!ShizukuHelper.hasPermission()) {
                 Toast.makeText(this, "Сначала предоставьте разрешение Shizuku", Toast.LENGTH_LONG).show()
-                ShizukuHelper.requestPermission()
                 return@setOnClickListener
             }
-
-            // HID-код пробела = 44 (0x2C)
-            val success = ShizukuHelper.sendKeyPress(44)
-
-            if (success) {
-                Toast.makeText(this, "Пробел отправлен через UHID", Toast.LENGTH_SHORT).show()
+            // Здесь можно добавить логику переключения, но для простоты
+            // просто запускаем сервер при каждом нажатии.
+            if (ShizukuHelper.startHidServer()) {
+                Toast.makeText(this, "HID-сервер запущен", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(this, "Ошибка: не удалось выполнить uinput", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Не удалось запустить HID-сервер", Toast.LENGTH_LONG).show()
             }
         }
+
+        btnPressSpace.setOnClickListener {
+            // HID-код пробела = 44
+            if (ShizukuHelper.sendKeyPress(44)) {
+                Toast.makeText(this, "Команда 'пробел' отправлена", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Ошибка: HID-сервер не запущен", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        ShizukuHelper.stopHidServer()
     }
 }
