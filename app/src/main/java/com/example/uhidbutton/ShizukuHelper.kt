@@ -25,18 +25,12 @@ object ShizukuHelper {
 
     fun isHidServerAlive(): Boolean = hidProcess?.isAlive == true
 
-    /**
-     * Запускает фоновый HID-сервер.
-     * Проверяет реальное состояние процесса, а не только ссылку.
-     */
     fun startHidServer(): Boolean {
-        // Проверяем не ссылку, а реальное состояние
         if (hidProcess?.isAlive == true) {
-            Log.d(TAG, "Hid server already running (pid=${hidProcess?.pid()})")
+            Log.d(TAG, "Hid server already running")
             return true
         }
 
-        // Процесс мёртв — чистим ссылку
         if (hidProcess != null) {
             Log.w(TAG, "Old HID process is dead, restarting")
             hidProcess = null
@@ -67,7 +61,7 @@ object ShizukuHelper {
             Thread.sleep(300)
 
             if (process.isAlive) {
-                Log.i(TAG, "HID server started successfully, pid=${process.pid()}")
+                Log.i(TAG, "HID server started successfully")
                 true
             } else {
                 Log.e(TAG, "HID server died immediately after start (exit=${process.exitValue()})")
